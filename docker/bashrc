@@ -1,0 +1,3 @@
+# Override prompt
+PS1="adh-build_tools:\w\\$ \[$(tput sgr0)\]"
+export PS1
