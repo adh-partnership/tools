@@ -1,19 +1,19 @@
 ARG GOLANG_VERSION=1.20.4
 ARG UBUNTU_VERSION=jammy
 
-FROM golang:${GOLANG_VERSION} AS build_tools_context
+FROM golang:${GOLANG_VERSION} AS binary_tools_context
 
-ENV COSIGN_VERSION=v2.0.2
 ENV GOLANGCI_LINT_VERSION=v1.52.2
 ENV HADOLINT_VERSION=v2.12.0
 ENV HUGO_VERSION=0.111.3
-ENV NODE_VERSION=
 ENV SHELLCHECK_VERSION=v0.9.0
 ENV SU_EXEC_VERSION=0.2
 
 WORKDIR /tmp
 ENV GOPATH=/tmp/go
 ENV OUTDIR=/out
+RUN mkdir -p ${OUTDIR}/usr/bin
+RUN mkdir -p ${OUTDIR}/usr/local
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
   apt-transport-https \
@@ -32,10 +32,15 @@ WORKDIR /tmp/su-exec-${SU_EXEC_VERSION}
 RUN make
 RUN cp -a su-exec ${OUTDIR}/usr/bin
 
+WORKDIR /tmp
+
 # Install shellcheck
 RUN wget -nv -O "/tmp/shellcheck-${SHELLCHECK_VERSION}.linux.$(uname -m).tar.xz" "https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.$(uname -m).tar.xz"
 RUN tar -xJf "/tmp/shellcheck-${SHELLCHECK_VERSION}.linux.$(uname -m).tar.xz" -C /tmp
 RUN mv /tmp/shellcheck-${SHELLCHECK_VERSION}/shellcheck ${OUTDIR}/usr/bin
+
+# Install golangci-lint
+RUN go install -ldflags="-s -w" github.com/golangci/golangci-lint/cmd/golangci-lint@${GOLANGCI_LINT_VERSION} 
 
 # Install Hadolint linter
 RUN set -eux; \
@@ -62,23 +67,42 @@ RUN set -eux; \
   tar -xzvf /tmp/${HUGO_TAR} -C /tmp; \
   mv /tmp/hugo ${OUTDIR}/usr/bin
 
-# Install cosign (for signing build artifacts) and verify signature
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-RUN set -eux; \
-  ${OUTDIR}/usr/local/google-cloud-sdk/bin/gsutil -q cp gs://cosign-releases/${COSIGN_VERSION}/cosign-linux-${TARGETARCH} /tmp/cosign \
-  && ${OUTDIR}/usr/local/google-cloud-sdk/bin/gsutil -q cat gs://cosign-releases/${COSIGN_VERSION}/cosign-linux-${TARGETARCH}.sig | base64 -d > /tmp/cosign.sig \
-  && wget -nv -O /tmp/cosign-pubkey https://raw.githubusercontent.com/sigstore/cosign/main/release/release-cosign.pub \
-  && openssl dgst -sha256 -verify /tmp/cosign-pubkey -signature /tmp/cosign.sig /tmp/cosign \
-  && chmod +x /tmp/cosign \
-  && mv /tmp/cosign ${OUTDIR}/usr/bin/ || exit 1
+# Move go tools
+RUN mv /tmp/go/bin/* ${OUTDIR}/usr/bin
 
+FROM ubuntu:${UBUNTU_VERSION} AS ruby_tools_context
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV AWESOMEBOT_VERSION=1.20.0
+ENV HTML_PROOFER_VERSION=3.19.0
+ENV MDL_VERSION=0.12.0
+ENV RUBY_VERSION=3.2.2
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  apt-transport-https \
+  ca-certificates \
+  gnupg2 \
+  software-properties-common \
+  build-essential \
+  zlib1g-dev \
+  cmake \
+  pkg-config \
+  libssl-dev \
+  git \
+  ruby3.0 \
+  ruby3.0-dev
+
+RUN gem install --no-wrappers --no-document awesome_bot -v ${AWESOMEBOT_VERSION}
+RUN gem install --no-wrappers --no-document html-proofer -v ${HTML_PROOFER_VERSION}
+RUN gem install --no-wrappers --no-document mdl -v ${MDL_VERSION}
+
+# Install nvm and node
 FROM ubuntu:${UBUNTU_VERSION} AS node_tools_context
 
-WORKDIR /node
+ENV NODEJS_VERSION=18.16.0
+ENV MARKDOWN_SPELLCHECK_VERSION=v1.3.1
 
-# Should be the LTS version
-ENV NODE_VERSION=18.16.0
-ENV SPELLCHECKER_CLI_VERSION=v6.1.1
+WORKDIR /node
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
   wget ca-certificates
@@ -95,37 +119,10 @@ RUN set -eux; \
 ADD https://nodejs.org/download/release/v${NODEJS_VERSION}/node-v${NODEJS_VERSION}-headers.tar.gz /tmp
 RUN tar -xzf /tmp/node-v${NODEJS_VERSION}-headers.tar.gz --strip-components=1 -C /usr/local
 
-RUN npm init -y
-RUN npm install --omit=dev --global \
-  spellcheck-cli@"${SPELLCHECKER_CLI_VERSION}"
-
-RUN rm -rf /usr/local/sbin
-RUN rm -rf /usr/local/share
-
-FROM ubuntu:${UBUNTU_VERSION} AS ruby_tools_context
-
-ENV DEBIAN_FRONTEND=noninteractive
-ENV AWESOMEBOT_VERSION=1.20.0
-ENV HTML_PROOFER_VERSION=5.0.7
-ENV MDL_VERSION=0.12.0
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-  apt-transport-https \
-  ca-certificates \
-  gnupg2 \
-  software-properties-common \
-  build-essential \
-  zlib1g-dev \
-  cmake \
-  pkg-config \
-  libssl-dev \
-  git
-
-RUN apt-get update && apt-get install -y --no-install-recommends ruby3.0 ruby3.0-dev
-
-RUN gem install --no-wrappers --no-document awesome_bot -v ${AWESOMEBOT_VERSION}
-RUN gem install --no-wrappers --no-document html-proofer -v ${HTML_PROOFER_VERSION}
-RUN gem install --no-wrappers --no-document mdl -v ${MDL_VERSION}
+RUN npm init -y && \
+  npm install --omit=dev --global \
+  npm@latest \
+  markdown-spellcheck@"${MARKDOWN_SPELLCHECK_VERSION}"
 
 FROM ubuntu:${UBUNTU_VERSION} AS base_os_context
 
@@ -209,7 +206,7 @@ COPY --from=binary_tools_context /usr/local/go /usr/local/go
 
 COPY --from=node_tools_context /usr/local/bin /usr/local/bin
 COPY --from=node_tools_context /usr/local/lib/node_modules /usr/local/lib/node_modules
-COPY --from=node_tools_context /node/node_modules /node_modules
+#COPY --from=node_tools_context /node/node_modules /node_modules
 
 COPY --from=ruby_tools_context /usr/bin /usr/bin
 COPY --from=ruby_tools_context /usr/lib /usr/lib
@@ -225,7 +222,7 @@ COPY bashrc ${HOME}/.bashrc
 RUN mkdir -p /go && \
   mkdir -p /gocache && \
   mkdir -p /gobin && \
-  mkdir -p /config-copy && \
+  mkdir -p /config && \
   mkdir -p /home/.cache && \
   chmod 777 /go && \
   chmod 777 /gocache && \

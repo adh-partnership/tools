@@ -30,7 +30,7 @@ if [[ -n "${GOLANG_IMAGE:-}" ]]; then
   ADDITIONAL_BUILD_ARGS+=" --build-arg GOLANG_IMAGE=${GOLANG_IMAGE}"
 fi
 
-pushd ../docker
+pushd docker
 
 ${CONTAINER_CLI} ${CONTAINER_BUILDER} --target build_tools \
   ${ADDITIONAL_BUILD_ARGS} \
