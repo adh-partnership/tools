@@ -1,11 +1,11 @@
-ARG GOLANG_VERSION=1.20.4
+ARG GOLANG_VERSION=1.20.7
 ARG UBUNTU_VERSION=jammy
 
 FROM golang:${GOLANG_VERSION} AS binary_tools_context
 
-ENV GOLANGCI_LINT_VERSION=v1.52.2
+ENV GOLANGCI_LINT_VERSION=v1.53.3
 ENV HADOLINT_VERSION=v2.12.0
-ENV HUGO_VERSION=0.111.3
+ENV HUGO_VERSION=0.116.3
 ENV SHELLCHECK_VERSION=v0.9.0
 ENV SU_EXEC_VERSION=0.2
 
@@ -99,7 +99,7 @@ RUN gem install --no-wrappers --no-document mdl -v ${MDL_VERSION}
 # Install nvm and node
 FROM ubuntu:${UBUNTU_VERSION} AS node_tools_context
 
-ENV NODEJS_VERSION=18.16.0
+ENV NODEJS_VERSION=18.17.0
 ENV MARKDOWN_SPELLCHECK_VERSION=v1.3.1
 
 WORKDIR /node
@@ -122,11 +122,14 @@ RUN tar -xzf /tmp/node-v${NODEJS_VERSION}-headers.tar.gz --strip-components=1 -C
 RUN npm init -y && \
   npm install --omit=dev --global \
   npm@latest \
-  markdown-spellcheck@"${MARKDOWN_SPELLCHECK_VERSION}"
+  markdown-spellcheck@"${MARKDOWN_SPELLCHECK_VERSION}" \
+  yarn
 
 FROM ubuntu:${UBUNTU_VERSION} AS base_os_context
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV DOCKER_VERSION=5:20.10.23~3-0~ubuntu-jammy
+ENV CONTAINERD_VERSION=1.6.21-1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
   apt-transport-https \
@@ -165,6 +168,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   libbpf-dev \
   net-tools \
   sudo
+
+# Fix Docker issue
+RUN update-alternatives --set iptables /usr/sbin/iptables-legacy && update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
+
+# Docker including docker-ce, docker-ce-cli, and containerd.io
+ADD https://download.docker.com/linux/ubuntu/gpg /tmp/docker-key
+RUN apt-key add /tmp/docker-key
+ARG TARGETARCH
+RUN add-apt-repository "deb [arch=${TARGETARCH}] https://download.docker.com/linux/ubuntu $(lsb_release -sc) stable"
+RUN apt-get update
+RUN apt-get -y install --no-install-recommends docker-ce="${DOCKER_VERSION}" docker-ce-cli="${DOCKER_VERSION}" containerd.io="${CONTAINERD_VERSION}"
 
 RUN rm -rf /var/lib/apt/lists/*
 RUN rm -fr /usr/share/python
