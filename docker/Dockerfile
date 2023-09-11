@@ -245,11 +245,16 @@ RUN mkdir -p /go && \
   mkdir -p /gobin && \
   mkdir -p /config && \
   mkdir -p /home/.cache && \
+  mkdir -p /home/.cargo/registry && \
+  mkdir -p /home/.cargo/git && \
   chmod 777 /go && \
   chmod 777 /gocache && \
   chmod 777 /gobin && \
   chmod 777 /config && \
-  chmod 777 /home/.cache
+  chmod 777 /home/.cache && \
+  chmod 777 /home/.cargo && \
+  chmod 777 /home/.cargo/registry && \
+  chmod 777 /home/.cargo/git
 
 WORKDIR /
 
