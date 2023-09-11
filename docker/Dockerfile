@@ -3,9 +3,9 @@ ARG UBUNTU_VERSION=jammy
 
 FROM golang:${GOLANG_VERSION} AS binary_tools_context
 
-ENV GOLANGCI_LINT_VERSION=v1.54.1
+ENV GOLANGCI_LINT_VERSION=v1.54.2
 ENV HADOLINT_VERSION=v2.12.0
-ENV HUGO_VERSION=0.117.0
+ENV HUGO_VERSION=0.118.2
 ENV SHELLCHECK_VERSION=v0.9.0
 ENV SU_EXEC_VERSION=0.2
 
@@ -99,7 +99,7 @@ RUN gem install --no-wrappers --no-document mdl -v ${MDL_VERSION}
 # Install nvm and node
 FROM ubuntu:${UBUNTU_VERSION} AS node_tools_context
 
-ENV NODEJS_VERSION=18.17.0
+ENV NODEJS_VERSION=18.17.1
 ENV MARKDOWN_SPELLCHECK_VERSION=v1.3.1
 
 WORKDIR /node
@@ -128,8 +128,7 @@ RUN npm init -y && \
 FROM ubuntu:${UBUNTU_VERSION} AS base_os_context
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV DOCKER_VERSION=5:20.10.23~3-0~ubuntu-jammy
-ENV CONTAINERD_VERSION=1.6.21-1
+ENV RUST_VERSION=1.72.0
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
   apt-transport-https \
@@ -178,7 +177,15 @@ RUN apt-key add /tmp/docker-key
 ARG TARGETARCH
 RUN add-apt-repository "deb [arch=${TARGETARCH}] https://download.docker.com/linux/ubuntu $(lsb_release -sc) stable"
 RUN apt-get update
-RUN apt-get -y install --no-install-recommends docker-ce="${DOCKER_VERSION}" docker-ce-cli="${DOCKER_VERSION}" containerd.io="${CONTAINERD_VERSION}"
+RUN apt-get -y install --no-install-recommends docker-ce docker-ce-cli containerd.io
+
+# Install rust stuff
+ENV CARGO_HOME=/home/.cargo
+ENV RUSTUP_HOME=/home/.rustup
+RUN curl --proto '=https' -v --tlsv1.2 -sSf https://sh.rustup.rs | \
+  sh -s -- -y -v --default-toolchain ${RUST_VERSION} --profile minimal --component rustfmt clippy &&\
+  /home/.cargo/bin/rustup default ${RUST_VERSION} &&\
+  mv /home/.cargo/bin/* /usr/bin
 
 RUN rm -rf /var/lib/apt/lists/*
 RUN rm -fr /usr/share/python
