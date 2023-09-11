@@ -146,6 +146,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   libltdl7 \
   libc-dev \
   libcurl4-openssl-dev \
+  libssl-dev \
   less \
   make \
   pkg-config \
