@@ -3,7 +3,7 @@ name: Build Tools
 on:
   push:
     branches:
-      - master
+      - main
   schedule:
     # Build weekly on Fridays at midnight UTC
     - cron: '0 0 * * 5'
