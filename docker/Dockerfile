@@ -3,7 +3,7 @@ ARG UBUNTU_VERSION=jammy
 
 FROM golang:${GOLANG_VERSION} AS binary_tools_context
 
-ENV GOLANGCI_LINT_VERSION=v1.56.1
+ENV GOLANGCI_LINT_VERSION=v1.58.0
 ENV HADOLINT_VERSION=v2.12.0
 ENV HUGO_VERSION=0.122.0
 ENV SHELLCHECK_VERSION=v0.9.0
@@ -99,7 +99,7 @@ RUN gem install --no-wrappers --no-document mdl -v ${MDL_VERSION}
 # Install nvm and node
 FROM ubuntu:${UBUNTU_VERSION} AS node_tools_context
 
-ENV NODEJS_VERSION=18.17.1
+ENV NODEJS_VERSION=20.12.2
 ENV MARKDOWN_SPELLCHECK_VERSION=v1.3.1
 
 WORKDIR /node
@@ -128,7 +128,7 @@ RUN npm init -y && \
 FROM ubuntu:${UBUNTU_VERSION} AS base_os_context
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV RUST_VERSION=1.72.0
+ENV RUST_VERSION=1.78.0
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
   apt-transport-https \
