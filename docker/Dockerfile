@@ -128,7 +128,7 @@ RUN npm init -y && \
 FROM ubuntu:${UBUNTU_VERSION} AS base_os_context
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV RUST_VERSION=1.78.0
+ENV RUST_VERSION=1.84.0
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
   apt-transport-https \
